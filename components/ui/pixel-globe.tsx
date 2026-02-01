@@ -6,12 +6,14 @@ interface PixelGlobeProps {
   className?: string;
   density?: number;
   animated?: boolean;
+  size?: number;
 }
 
 export function PixelGlobe({
   className = "",
   density = 40,
   animated = true,
+  size = 500,
 }: PixelGlobeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
@@ -24,7 +26,6 @@ export function PixelGlobe({
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const size = 500;
 
     canvas.width = size * dpr;
     canvas.height = size * dpr;
@@ -151,7 +152,7 @@ export function PixelGlobe({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [density, animated]);
+  }, [density, animated, size]);
 
   return (
     <canvas
