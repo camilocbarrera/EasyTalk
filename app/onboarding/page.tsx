@@ -12,59 +12,41 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { LanguageSelector } from "@/components/user/language-selector";
+import { MultiLanguageSelector } from "@/components/user/multi-language-selector";
 import { type LanguageCode } from "@/lib/constants/languages";
 import { Loader2, Globe2 } from "lucide-react";
 import { toast } from "sonner";
+import { useUserLanguages, useUpdateUserLanguages } from "@/lib/query/hooks/use-user";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { isLoaded, isSignedIn, user } = useUser();
-  const [language, setLanguage] = useState<LanguageCode>("en");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(true);
+  const [languages, setLanguages] = useState<LanguageCode[]>(["en"]);
 
-  // Sync user to DB on mount
+  // TanStack Query hooks
+  const { data: languagePrefs, isLoading: isLoadingLanguages } = useUserLanguages();
+  const updateLanguages = useUpdateUserLanguages();
+
+  // Sync local state with query data
   useEffect(() => {
-    if (isSignedIn) {
-      fetch("/api/users/me")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.languagePreference) {
-            setLanguage(data.languagePreference as LanguageCode);
-          }
-          setIsSyncing(false);
-        })
-        .catch(() => {
-          setIsSyncing(false);
-        });
+    if (languagePrefs && languagePrefs.length > 0) {
+      setLanguages(languagePrefs.map((p) => p.languageCode));
     }
-  }, [isSignedIn]);
+  }, [languagePrefs]);
 
   const handleSubmit = async () => {
-    setIsLoading(true);
-
     try {
-      const res = await fetch("/api/users/me/language", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to save preference");
-      }
-
-      toast.success("Language preference saved!");
+      await updateLanguages.mutateAsync(languages);
+      toast.success("Language preferences saved!");
       router.push("/dashboard");
     } catch {
-      toast.error("Failed to save preference. Please try again.");
-    } finally {
-      setIsLoading(false);
+      toast.error("Failed to save preferences. Please try again.");
     }
   };
 
-  if (!isLoaded || isSyncing) {
+  const isSyncing = !isLoaded || isLoadingLanguages;
+
+  if (isSyncing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
         <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
@@ -86,24 +68,24 @@ export default function OnboardingPage() {
           </div>
           <CardTitle className="text-2xl">Welcome, {user.firstName || "there"}!</CardTitle>
           <CardDescription>
-            Choose your preferred language for chat translations. You can change
-            this later in settings.
+            Choose your preferred languages for chat translations. Select up to 3
+            languages - your first choice will be your primary language.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center">
-          <LanguageSelector
-            value={language}
-            onChange={setLanguage}
-            disabled={isLoading}
+          <MultiLanguageSelector
+            value={languages}
+            onChange={setLanguages}
+            disabled={updateLanguages.isPending}
           />
         </CardContent>
         <CardFooter>
           <Button
             onClick={handleSubmit}
             className="w-full"
-            disabled={isLoading}
+            disabled={updateLanguages.isPending || languages.length === 0}
           >
-            {isLoading ? (
+            {updateLanguages.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Saving...

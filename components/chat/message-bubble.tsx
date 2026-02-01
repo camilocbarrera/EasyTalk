@@ -17,6 +17,7 @@ interface MessageBubbleProps {
   showHeader: boolean;
   userLanguage: LanguageCode;
   isTranslating?: boolean;
+  showTranslatedByDefault?: boolean;
 }
 
 export function MessageBubble({
@@ -30,13 +31,22 @@ export function MessageBubble({
   showHeader,
   userLanguage,
   isTranslating = false,
+  showTranslatedByDefault = false,
 }: MessageBubbleProps) {
-  const [showOriginal, setShowOriginal] = useState(false);
+  // If we should show translated by default, start with showOriginal = false
+  // Otherwise, start with showing original (showOriginal = true means we see original)
+  const [showOriginal, setShowOriginal] = useState(!showTranslatedByDefault);
 
   const needsTranslation = originalLanguage !== userLanguage;
-  const hasTranslation = needsTranslation && translatedContent;
-  const displayContent =
-    hasTranslation && !showOriginal ? translatedContent : content;
+  const hasTranslation = translatedContent !== undefined;
+
+  // Determine what to display
+  let displayContent: string;
+  if (hasTranslation && !showOriginal) {
+    displayContent = translatedContent;
+  } else {
+    displayContent = content;
+  }
 
   const initials = userName
     .split(" ")

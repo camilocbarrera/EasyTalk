@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
-import { db, messages, sessions } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { db, messages, sessions, userLanguagePreferences } from "@/lib/db";
+import { eq, asc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import {
   translateMessageForParticipants,
@@ -73,19 +73,59 @@ export async function POST(req: Request) {
     })
     .returning();
 
-  // Get all participant languages for translation
-  const participantLanguages = session.participants
-    .map((p) => p.user.languagePreference as LanguageCode)
-    .filter((lang) => lang && lang !== originalLanguage);
+  // Get all participant language preferences (multiple per user)
+  const participantUserIds = session.participants.map((p) => p.userId);
+
+  // Fetch all language preferences for all participants
+  const allLanguagePreferences = await Promise.all(
+    participantUserIds.map(async (participantUserId) => {
+      const prefs = await db.query.userLanguagePreferences.findMany({
+        where: eq(userLanguagePreferences.userId, participantUserId),
+        orderBy: [asc(userLanguagePreferences.priority)],
+      });
+
+      // If no preferences in new table, fall back to legacy field
+      if (prefs.length === 0) {
+        const participant = session.participants.find(
+          (p) => p.userId === participantUserId
+        );
+        const legacyLang = participant?.user.languagePreference as LanguageCode;
+        if (legacyLang) {
+          return [{ languageCode: legacyLang, priority: 0 }];
+        }
+        return [];
+      }
+
+      return prefs.map((p) => ({
+        languageCode: p.languageCode as LanguageCode,
+        priority: p.priority,
+      }));
+    })
+  );
+
+  // Flatten and deduplicate, keeping lowest priority for each language
+  const languageMap = new Map<LanguageCode, number>();
+  for (const prefs of allLanguagePreferences) {
+    for (const pref of prefs) {
+      const existing = languageMap.get(pref.languageCode);
+      if (existing === undefined || pref.priority < existing) {
+        languageMap.set(pref.languageCode, pref.priority);
+      }
+    }
+  }
+
+  const targetLanguages = Array.from(languageMap.entries())
+    .filter(([lang]) => lang !== originalLanguage)
+    .map(([languageCode, priority]) => ({ languageCode, priority }));
 
   // Translate in background (don't block response)
-  if (participantLanguages.length > 0) {
+  if (targetLanguages.length > 0) {
     translateMessageForParticipants(
       sessionId,
       message.id,
       content,
       originalLanguage,
-      participantLanguages
+      targetLanguages
     ).catch((err) => {
       console.error("Translation error:", err);
     });

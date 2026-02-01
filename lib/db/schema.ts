@@ -6,6 +6,7 @@ import {
   uuid,
   primaryKey,
   index,
+  integer,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -27,7 +28,35 @@ export const users = pgTable("users", {
 export const usersRelations = relations(users, ({ many }) => ({
   sessionParticipants: many(sessionParticipants),
   messages: many(messages),
+  languagePreferences: many(userLanguagePreferences),
 }));
+
+// User Language Preferences - multiple languages per user with priority
+export const userLanguagePreferences = pgTable(
+  "user_language_preferences",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    languageCode: varchar("language_code", { length: 10 }).notNull(),
+    priority: integer("priority").notNull().default(0), // 0 = primary
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.languageCode] }),
+    index("user_lang_pref_user_idx").on(table.userId),
+  ]
+);
+
+export const userLanguagePreferencesRelations = relations(
+  userLanguagePreferences,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [userLanguagePreferences.userId],
+      references: [users.id],
+    }),
+  })
+);
 
 // Sessions - chat rooms with shareable codes
 export const sessions = pgTable(
@@ -155,3 +184,5 @@ export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;
 export type Translation = typeof translations.$inferSelect;
 export type NewTranslation = typeof translations.$inferInsert;
+export type UserLanguagePreference = typeof userLanguagePreferences.$inferSelect;
+export type NewUserLanguagePreference = typeof userLanguagePreferences.$inferInsert;

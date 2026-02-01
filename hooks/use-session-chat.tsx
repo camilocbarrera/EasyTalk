@@ -9,7 +9,7 @@ interface UseSessionChatProps {
   userId: string;
   userName: string;
   userImageUrl?: string;
-  userLanguage: LanguageCode;
+  userLanguages: LanguageCode[];
 }
 
 export interface ChatMessageWithTranslation {
@@ -30,7 +30,7 @@ interface PresenceState {
   id: string;
   name: string;
   imageUrl?: string;
-  language: LanguageCode;
+  languages: LanguageCode[];
 }
 
 const EVENT_MESSAGE = "new-message";
@@ -41,7 +41,7 @@ export function useSessionChat({
   userId,
   userName,
   userImageUrl,
-  userLanguage,
+  userLanguages,
 }: UseSessionChatProps) {
   const supabase = createClient();
   const [messages, setMessages] = useState<ChatMessageWithTranslation[]>([]);
@@ -49,6 +49,9 @@ export function useSessionChat({
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<PresenceState[]>([]);
   const messageIdsRef = useRef(new Set<string>());
+
+  // Get primary language (first in array)
+  const primaryLanguage = userLanguages[0] || "en";
 
   useEffect(() => {
     const roomName = `session:${sessionId}`;
@@ -111,12 +114,12 @@ export function useSessionChat({
     newChannel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
         setIsConnected(true);
-        // Track presence
+        // Track presence with multiple languages
         await newChannel.track({
           id: userId,
           name: userName,
           imageUrl: userImageUrl,
-          language: userLanguage,
+          languages: userLanguages,
         });
       } else {
         setIsConnected(false);
@@ -128,7 +131,7 @@ export function useSessionChat({
     return () => {
       supabase.removeChannel(newChannel);
     };
-  }, [sessionId, userId, userName, userImageUrl, userLanguage, supabase]);
+  }, [sessionId, userId, userName, userImageUrl, userLanguages, supabase]);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -139,7 +142,7 @@ export function useSessionChat({
       const message: ChatMessageWithTranslation = {
         id: tempId,
         content: content.trim(),
-        originalLanguage: userLanguage,
+        originalLanguage: primaryLanguage,
         userId,
         user: {
           id: userId,
@@ -201,7 +204,7 @@ export function useSessionChat({
         console.error("Failed to save message:", error);
       }
     },
-    [isConnected, sessionId, userId, userName, userImageUrl, userLanguage]
+    [isConnected, sessionId, userId, userName, userImageUrl, primaryLanguage]
   );
 
   const addInitialMessages = useCallback(

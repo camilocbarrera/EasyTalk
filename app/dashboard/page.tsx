@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SessionCard } from "@/components/session/session-card";
 import { ShareDialog } from "@/components/session/share-dialog";
-import { LanguageSelector } from "@/components/user/language-selector";
+import { MultiLanguageSelector } from "@/components/user/multi-language-selector";
 import { Plus, Globe } from "lucide-react";
 import Link from "next/link";
 import type { Session, User, SessionParticipant } from "@/lib/db/schema";
 import type { LanguageCode } from "@/lib/constants/languages";
+import { toast } from "sonner";
+import { useSessions } from "@/lib/query/hooks/use-sessions";
+import { useUserLanguages, useUpdateUserLanguages } from "@/lib/query/hooks/use-user";
 
 interface SessionWithRelations extends Session {
   creator: User;
@@ -21,46 +24,28 @@ interface SessionWithRelations extends Session {
 export default function DashboardPage() {
   const router = useRouter();
   const { isLoaded, isSignedIn } = useUser();
-  const [sessions, setSessions] = useState<SessionWithRelations[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [userLanguage, setUserLanguage] = useState<LanguageCode>("en");
   const [shareSession, setShareSession] =
     useState<SessionWithRelations | null>(null);
 
-  useEffect(() => {
-    if (isSignedIn) {
-      // Fetch user data
-      fetch("/api/users/me")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.languagePreference) {
-            setUserLanguage(data.languagePreference as LanguageCode);
-          }
-        });
+  // TanStack Query hooks
+  const { data: sessions, isLoading: isLoadingSessions } = useSessions();
+  const { data: languagePrefs, isLoading: isLoadingLanguages } = useUserLanguages();
+  const updateLanguages = useUpdateUserLanguages();
 
-      // Fetch sessions
-      fetch("/api/sessions")
-        .then((res) => res.json())
-        .then((data) => {
-          setSessions(data);
-          setIsLoading(false);
-        })
-        .catch(() => {
-          setIsLoading(false);
-        });
+  const userLanguages: LanguageCode[] =
+    languagePrefs?.map((p) => p.languageCode) ?? ["en"];
+
+  const handleLanguagesChange = async (languages: LanguageCode[]) => {
+    try {
+      await updateLanguages.mutateAsync(languages);
+    } catch {
+      toast.error("Failed to update language preferences");
     }
-  }, [isSignedIn]);
-
-  const handleLanguageChange = async (language: LanguageCode) => {
-    setUserLanguage(language);
-    await fetch("/api/users/me/language", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ language }),
-    });
   };
 
-  if (!isLoaded || isLoading) {
+  const isLoading = !isLoaded || isLoadingSessions || isLoadingLanguages;
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background p-6 pt-24 sm:px-12 lg:px-20">
         <div className="max-w-4xl mx-auto space-y-8">
@@ -84,7 +69,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background p-6 pt-24 sm:px-12 lg:px-20">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
               Sessions
@@ -93,14 +78,7 @@ export default function DashboardPage() {
               Manage your chat sessions
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm">
-              <Globe className="h-4 w-4 text-muted-foreground" />
-              <LanguageSelector
-                value={userLanguage}
-                onChange={handleLanguageChange}
-              />
-            </div>
+          <div className="flex flex-col items-start gap-3 sm:items-end">
             <Button asChild size="sm">
               <Link href="/session/new">
                 <Plus className="h-4 w-4" />
@@ -110,8 +88,21 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Language Preferences */}
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Your Languages</span>
+          </div>
+          <MultiLanguageSelector
+            value={userLanguages}
+            onChange={handleLanguagesChange}
+            disabled={updateLanguages.isPending}
+          />
+        </div>
+
         {/* Sessions Grid */}
-        {sessions.length === 0 ? (
+        {!sessions || sessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-4">
               <Globe className="h-6 w-6 text-muted-foreground" />

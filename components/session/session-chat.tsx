@@ -28,7 +28,7 @@ interface SessionChatProps {
   userId: string;
   userName: string;
   userImageUrl?: string;
-  userLanguage: LanguageCode;
+  userLanguages: LanguageCode[];
   initialMessages: {
     id: string;
     content: string;
@@ -51,17 +51,20 @@ export function SessionChat({
   userId,
   userName,
   userImageUrl,
-  userLanguage: initialUserLanguage,
+  userLanguages: initialUserLanguages,
   initialMessages,
 }: SessionChatProps) {
   const { containerRef, scrollToBottom } = useChatScroll();
   const [newMessage, setNewMessage] = useState("");
-  const [currentLanguage, setCurrentLanguage] =
-    useState<LanguageCode>(initialUserLanguage);
+  const [userLanguages, setUserLanguages] =
+    useState<LanguageCode[]>(initialUserLanguages);
   const [pendingTranslations, setPendingTranslations] = useState<Set<string>>(
     new Set()
   );
   const [isPending, startTransition] = useTransition();
+
+  // Primary language is the first in the array
+  const primaryLanguage = userLanguages[0] || "en";
 
   const {
     messages,
@@ -74,7 +77,7 @@ export function SessionChat({
     userId,
     userName,
     userImageUrl,
-    userLanguage: currentLanguage,
+    userLanguages,
   });
 
   // Load initial messages on mount
@@ -91,14 +94,15 @@ export function SessionChat({
   useEffect(() => {
     const newPending = new Set<string>();
     for (const message of messages) {
-      const needsTranslation = message.originalLanguage !== currentLanguage;
-      const hasTranslation = message.translations[currentLanguage];
+      // Check if message needs translation and doesn't have it yet
+      const needsTranslation = !userLanguages.includes(message.originalLanguage);
+      const hasTranslation = message.translations[primaryLanguage];
       if (needsTranslation && !hasTranslation) {
         newPending.add(message.id);
       }
     }
     setPendingTranslations(newPending);
-  }, [messages, currentLanguage]);
+  }, [messages, primaryLanguage, userLanguages]);
 
   const handleSendMessage = useCallback(
     (e: React.FormEvent) => {
@@ -112,29 +116,45 @@ export function SessionChat({
   );
 
   const handleLanguageChange = useCallback((language: LanguageCode) => {
-    setCurrentLanguage(language);
+    // Update primary language (put it first in the array)
+    setUserLanguages((prev) => {
+      const filtered = prev.filter((l) => l !== language);
+      return [language, ...filtered].slice(0, 3);
+    });
 
     // Persist to user preferences
     startTransition(async () => {
       try {
-        await fetch("/api/users/me/language", {
-          method: "PATCH",
+        await fetch("/api/users/me/languages", {
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ language }),
+          body: JSON.stringify({
+            languages: [language, ...userLanguages.filter((l) => l !== language)].slice(0, 3),
+          }),
         });
       } catch (error) {
         console.error("Failed to update language preference:", error);
       }
     });
-  }, []);
+  }, [userLanguages]);
 
-  const getTranslatedContent = (
+  // Determine what content to show for a message
+  const getDisplayContent = (
     message: ChatMessageWithTranslation
-  ): string | undefined => {
-    if (message.originalLanguage === currentLanguage) {
-      return undefined;
+  ): { content: string; isTranslation: boolean } => {
+    // If message is in one of the user's preferred languages, show original
+    if (userLanguages.includes(message.originalLanguage)) {
+      return { content: message.content, isTranslation: false };
     }
-    return message.translations[currentLanguage];
+
+    // Otherwise, try to show translation in primary language
+    const translation = message.translations[primaryLanguage];
+    if (translation) {
+      return { content: translation, isTranslation: true };
+    }
+
+    // Fallback to original if no translation available yet
+    return { content: message.content, isTranslation: false };
   };
 
   return (
@@ -163,7 +183,7 @@ export function SessionChat({
           <div className="flex items-center gap-2">
             <Globe className="h-4 w-4 text-muted-foreground" />
             <Select
-              value={currentLanguage}
+              value={primaryLanguage}
               onValueChange={(value) =>
                 handleLanguageChange(value as LanguageCode)
               }
@@ -206,6 +226,8 @@ export function SessionChat({
                 const showHeader =
                   !prevMessage || prevMessage.user.id !== message.user.id;
 
+                const { content, isTranslation } = getDisplayContent(message);
+
                 return (
                   <div
                     key={message.id}
@@ -213,15 +235,16 @@ export function SessionChat({
                   >
                     <MessageBubble
                       content={message.content}
-                      translatedContent={getTranslatedContent(message)}
+                      translatedContent={isTranslation ? content : undefined}
                       originalLanguage={message.originalLanguage}
                       userName={message.user.name}
                       userImageUrl={message.user.imageUrl}
                       timestamp={message.createdAt}
                       isOwnMessage={message.user.id === userId}
                       showHeader={showHeader}
-                      userLanguage={currentLanguage}
+                      userLanguage={primaryLanguage}
                       isTranslating={pendingTranslations.has(message.id)}
+                      showTranslatedByDefault={isTranslation}
                     />
                   </div>
                 );

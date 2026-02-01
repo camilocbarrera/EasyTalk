@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, use } from "react";
 import { useUser, UserButton } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -10,14 +10,9 @@ import { ShareDialog } from "@/components/session/share-dialog";
 import { SessionChat } from "@/components/session/session-chat";
 import { ArrowLeft, Share2, Users } from "lucide-react";
 import Link from "next/link";
-import type { Session, User, SessionParticipant, Message } from "@/lib/db/schema";
 import type { LanguageCode } from "@/lib/constants/languages";
-
-interface SessionWithRelations extends Session {
-  creator: User;
-  participants: (SessionParticipant & { user: User })[];
-  messages: (Message & { user: User; translations: { targetLanguage: string; translatedContent: string }[] })[];
-}
+import { useSession } from "@/lib/query/hooks/use-sessions";
+import { useUserLanguages } from "@/lib/query/hooks/use-user";
 
 export default function SessionPage({
   params,
@@ -27,49 +22,18 @@ export default function SessionPage({
   const { id } = use(params);
   const router = useRouter();
   const { isLoaded, isSignedIn, user: clerkUser } = useUser();
-  const [session, setSession] = useState<SessionWithRelations | null>(null);
-  const [userLanguage, setUserLanguage] = useState<LanguageCode>("en");
-  const [isLoading, setIsLoading] = useState(true);
   const [showShare, setShowShare] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isSignedIn) {
-      // Fetch user data
-      fetch("/api/users/me")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.languagePreference) {
-            setUserLanguage(data.languagePreference as LanguageCode);
-          }
-        });
+  // TanStack Query hooks
+  const { data: session, isLoading: isLoadingSession, error } = useSession(id);
+  const { data: languagePrefs, isLoading: isLoadingLanguages } = useUserLanguages();
 
-      // Fetch session
-      fetch(`/api/sessions/${id}`)
-        .then((res) => {
-          if (!res.ok) {
-            if (res.status === 404) {
-              throw new Error("Session not found");
-            }
-            if (res.status === 403) {
-              throw new Error("You are not a participant in this session");
-            }
-            throw new Error("Failed to load session");
-          }
-          return res.json();
-        })
-        .then((data) => {
-          setSession(data);
-          setIsLoading(false);
-        })
-        .catch((err) => {
-          setError(err.message);
-          setIsLoading(false);
-        });
-    }
-  }, [isSignedIn, id]);
+  const userLanguages: LanguageCode[] =
+    languagePrefs?.map((p) => p.languageCode) ?? ["en"];
 
-  if (!isLoaded || isLoading) {
+  const isLoading = !isLoaded || isLoadingSession || isLoadingLanguages;
+
+  if (isLoading) {
     return (
       <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-black">
         <header className="flex items-center justify-between border-b border-border p-4">
@@ -92,7 +56,9 @@ export default function SessionPage({
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 dark:bg-black p-4">
         <div className="text-center space-y-4">
-          <p className="text-zinc-600 dark:text-zinc-400">{error}</p>
+          <p className="text-zinc-600 dark:text-zinc-400">
+            {error instanceof Error ? error.message : "Failed to load session"}
+          </p>
           <Button asChild>
             <Link href="/dashboard">Back to Dashboard</Link>
           </Button>
@@ -173,7 +139,7 @@ export default function SessionPage({
           userId={clerkUser?.id || ""}
           userName={clerkUser?.username || clerkUser?.firstName || "User"}
           userImageUrl={clerkUser?.imageUrl}
-          userLanguage={userLanguage}
+          userLanguages={userLanguages}
           initialMessages={session.messages}
         />
       </div>
