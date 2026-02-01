@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { CreateSessionForm } from "@/components/session/create-session-form";
 import { JoinSessionForm } from "@/components/session/join-session-form";
 import { PixelGlobe } from "@/components/ui/pixel-globe";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Globe, Zap, Users } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
@@ -30,72 +30,99 @@ export default function Home() {
   if (!isSignedIn) {
     return (
       <div className="relative flex min-h-screen flex-col bg-background overflow-hidden">
-        {/* Pixel Globe - positioned asymmetrically */}
-        <div className="absolute -right-20 top-1/2 -translate-y-1/2 opacity-90 pointer-events-none select-none sm:right-0 lg:right-[5%]">
-          <PixelGlobe density={50} animated />
+        {/* Background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-b from-muted/50 via-background to-background pointer-events-none" />
+
+        {/* Pixel Globe - Hero Background */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="relative opacity-30">
+            <PixelGlobe density={60} animated size={800} />
+          </div>
         </div>
 
-        {/* Main content - anchored left */}
-        <main className="relative z-10 flex flex-1 flex-col justify-end px-6 pb-16 sm:px-12 lg:px-20 lg:pb-24">
-          {/* Features - subtle, top section */}
-          <div className="mb-auto pt-24 sm:pt-32">
-            <div className="flex flex-wrap gap-8 text-sm text-muted-foreground max-w-md">
-              <div className="space-y-1">
-                <div className="font-mono text-xs uppercase tracking-wider text-foreground/60">
-                  01
-                </div>
-                <div className="font-medium text-foreground">Real-time</div>
-                <div className="text-xs">Instant translation</div>
-              </div>
-              <div className="space-y-1">
-                <div className="font-mono text-xs uppercase tracking-wider text-foreground/60">
-                  02
-                </div>
-                <div className="font-medium text-foreground">12+ Languages</div>
-                <div className="text-xs">Native support</div>
-              </div>
-              <div className="space-y-1">
-                <div className="font-mono text-xs uppercase tracking-wider text-foreground/60">
-                  03
-                </div>
-                <div className="font-medium text-foreground">Simple</div>
-                <div className="text-xs">Share a code</div>
-              </div>
+        {/* Radial gradient overlay for depth */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,var(--background)_70%)] pointer-events-none" />
+
+        {/* Main content */}
+        <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-16">
+          <div className="max-w-2xl mx-auto text-center space-y-8">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-muted/80 backdrop-blur-sm border border-border/50 text-sm text-muted-foreground">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
+              Real-time translation powered by AI
             </div>
-          </div>
 
-          {/* Tagline and title */}
-          <div className="max-w-xl space-y-6">
-            <p className="text-sm font-medium tracking-wide text-muted-foreground">
-              Communication Without Boundaries
-            </p>
-            <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl">
-              EasyTalk
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-md leading-relaxed">
-              Real-time chat that automatically translates every message.
-              Everyone speaks their native language.
-            </p>
+            {/* Headline */}
+            <div className="space-y-4">
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-foreground">
+                Speak Your Language.
+                <br />
+                <span className="text-muted-foreground">Connect with Everyone.</span>
+              </h1>
+              <p className="text-lg sm:text-xl text-muted-foreground max-w-lg mx-auto leading-relaxed">
+                Real-time chat that automatically translates every message.
+                Everyone speaks their native language, everyone understands.
+              </p>
+            </div>
 
-            <div className="flex items-center gap-4 pt-4">
+            {/* CTA */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
               <SignInButton mode="modal">
                 <Button
                   size="lg"
-                  className="h-12 px-8 text-base font-medium tracking-wide"
+                  className="h-12 px-8 text-base font-medium tracking-wide shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
                 >
-                  Get Started
+                  Get Started Free
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </SignInButton>
-              <span className="text-xs text-muted-foreground">
-                Free to use
+              <span className="text-sm text-muted-foreground">
+                No credit card required
               </span>
+            </div>
+          </div>
+
+          {/* Feature cards */}
+          <div className="mt-20 w-full max-w-3xl mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="group p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 hover:border-border hover:bg-card/80 transition-all">
+                <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Zap className="h-5 w-5 text-foreground" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-1">Instant</h3>
+                <p className="text-sm text-muted-foreground">
+                  Messages translate in real-time as you type
+                </p>
+              </div>
+
+              <div className="group p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 hover:border-border hover:bg-card/80 transition-all">
+                <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Globe className="h-5 w-5 text-foreground" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-1">12+ Languages</h3>
+                <p className="text-sm text-muted-foreground">
+                  Support for major world languages
+                </p>
+              </div>
+
+              <div className="group p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 hover:border-border hover:bg-card/80 transition-all">
+                <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Users className="h-5 w-5 text-foreground" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-1">Simple Sharing</h3>
+                <p className="text-sm text-muted-foreground">
+                  Share a code and start talking instantly
+                </p>
+              </div>
             </div>
           </div>
         </main>
 
-        {/* Bottom decorative line */}
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
+        {/* Bottom gradient line */}
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
       </div>
     );
   }
@@ -103,21 +130,20 @@ export default function Home() {
   // Signed in - show create/join options
   return (
     <div className="relative flex min-h-screen flex-col bg-background overflow-hidden">
-      {/* Subtle background pattern */}
-      <div className="absolute inset-0 opacity-[0.02] pointer-events-none">
-        <div
-          className="h-full w-full"
-          style={{
-            backgroundImage: `radial-gradient(circle, currentColor 1px, transparent 1px)`,
-            backgroundSize: "24px 24px",
-          }}
-        />
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-muted/30 via-background to-background pointer-events-none" />
+
+      {/* Pixel Globe - subtle background */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="relative opacity-10">
+          <PixelGlobe density={40} animated size={600} />
+        </div>
       </div>
 
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-16">
         <div className="w-full max-w-md space-y-8">
           {/* Header */}
-          <div className="space-y-2">
+          <div className="text-center space-y-2">
             <h1 className="text-3xl font-bold tracking-tight text-foreground">
               Start Talking
             </h1>
@@ -128,7 +154,9 @@ export default function Home() {
 
           {/* Forms */}
           <div className="space-y-6">
-            <CreateSessionForm />
+            <div className="p-6 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/50">
+              <CreateSessionForm />
+            </div>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -141,12 +169,14 @@ export default function Home() {
               </div>
             </div>
 
-            <JoinSessionForm />
+            <div className="p-6 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/50">
+              <JoinSessionForm />
+            </div>
           </div>
 
           {/* Dashboard link */}
-          <div className="pt-4 text-center">
-            <Button variant="ghost" asChild className="text-muted-foreground">
+          <div className="text-center">
+            <Button variant="ghost" asChild className="text-muted-foreground hover:text-foreground">
               <Link href="/dashboard">
                 View my sessions
                 <ArrowRight className="ml-2 h-3 w-3" />
