@@ -4,15 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 export function CreateSessionForm() {
@@ -46,42 +38,47 @@ export function CreateSessionForm() {
       toast.success("Session created!");
       router.push(`/session/${session.id}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create session");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create session"
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card>
-      <form onSubmit={handleSubmit}>
-        <CardHeader>
-          <CardTitle>Create a Session</CardTitle>
-          <CardDescription>
-            Start a new multilingual chat room
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Input
-            placeholder="Session name (e.g., Team Standup)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={isLoading}
-          />
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              "Create Session"
-            )}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="space-y-1.5">
+        <label
+          htmlFor="session-name"
+          className="text-sm font-medium text-foreground"
+        >
+          Create a session
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Start a new multilingual chat room
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <Input
+          id="session-name"
+          placeholder="e.g., Team Standup"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={isLoading}
+          className="flex-1"
+        />
+        <Button type="submit" disabled={isLoading} className="shrink-0">
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              <span className="sr-only sm:not-sr-only sm:ml-2">Create</span>
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
   );
 }
