@@ -1,7 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
-import { db, sessions, sessionParticipants, users } from "@/lib/db";
+import { db, sessions, sessionParticipants } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { ensureUserInDb } from "@/lib/auth/ensure-user";
 
 export async function GET(
   req: Request,
@@ -59,15 +60,12 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Verify user exists in our DB
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
-
+  // Ensure user exists in database (sync from Clerk if needed)
+  const user = await ensureUserInDb(userId);
   if (!user) {
     return NextResponse.json(
-      { error: "User not found. Please refresh and try again." },
-      { status: 404 }
+      { error: "Failed to sync user. Please try again." },
+      { status: 500 }
     );
   }
 

@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { db, messages, users, sessions } from "@/lib/db";
+import { db, messages, sessions } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import {
@@ -7,6 +7,7 @@ import {
   detectLanguage,
   type LanguageCode,
 } from "@/lib/translation/service";
+import { ensureUserInDb } from "@/lib/auth/ensure-user";
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -48,13 +49,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not a participant" }, { status: 403 });
   }
 
-  // Get user's language preference
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
-
+  // Ensure user exists in database (sync from Clerk if needed)
+  const user = await ensureUserInDb(userId);
   if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Failed to sync user. Please try again." },
+      { status: 500 }
+    );
   }
 
   // Detect language of the message (or use user's preference)

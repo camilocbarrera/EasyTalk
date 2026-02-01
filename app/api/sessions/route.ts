@@ -3,6 +3,7 @@ import { db, sessions, sessionParticipants } from "@/lib/db";
 import { eq, or, desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { generateSessionCode } from "@/lib/utils/session-code";
+import { ensureUserInDb } from "@/lib/auth/ensure-user";
 
 export async function GET() {
   const { userId } = await auth();
@@ -60,6 +61,15 @@ export async function POST(req: Request) {
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Ensure user exists in database (sync from Clerk if needed)
+  const user = await ensureUserInDb(userId);
+  if (!user) {
+    return NextResponse.json(
+      { error: "Failed to sync user. Please try again." },
+      { status: 500 }
+    );
   }
 
   const body = await req.json();
