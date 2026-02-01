@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useUser, UserButton } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -110,15 +110,15 @@ export default function SessionPage({
   return (
     <div className="flex h-screen flex-col bg-white dark:bg-zinc-900">
       {/* Header */}
-      <header className="flex items-center justify-between border-b border-border p-4 shrink-0">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
+      <header className="flex items-center justify-between border-b border-border px-4 py-3 shrink-0 bg-background">
+        <div className="flex items-center gap-3 min-w-0">
+          <Button variant="ghost" size="icon" className="shrink-0" asChild>
             <Link href="/dashboard">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <div>
-            <h1 className="font-semibold text-zinc-900 dark:text-zinc-50">
+          <div className="min-w-0">
+            <h1 className="font-semibold text-foreground truncate">
               {session.name}
             </h1>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -127,25 +127,25 @@ export default function SessionPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 shrink-0">
           {/* Participants */}
-          <div className="flex items-center gap-2 mr-2">
+          <div className="hidden sm:flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
             <div className="flex -space-x-2">
-              {onlineParticipants.slice(0, 5).map(({ user }) => (
+              {onlineParticipants.slice(0, 4).map(({ user }) => (
                 <Avatar
                   key={user.id}
                   className="h-7 w-7 border-2 border-background"
                 >
                   <AvatarImage src={user.imageUrl || undefined} />
-                  <AvatarFallback className="text-xs">
+                  <AvatarFallback className="text-xs bg-muted">
                     {user.firstName?.[0] || user.username?.[0] || "?"}
                   </AvatarFallback>
                 </Avatar>
               ))}
-              {onlineParticipants.length > 5 && (
-                <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs border-2 border-background">
-                  +{onlineParticipants.length - 5}
+              {onlineParticipants.length > 4 && (
+                <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium border-2 border-background">
+                  +{onlineParticipants.length - 4}
                 </div>
               )}
             </div>
@@ -154,6 +154,15 @@ export default function SessionPage({
           <Button variant="outline" size="icon" onClick={() => setShowShare(true)}>
             <Share2 className="h-4 w-4" />
           </Button>
+
+          {/* User account */}
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "h-8 w-8",
+              },
+            }}
+          />
         </div>
       </header>
 
