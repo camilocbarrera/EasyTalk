@@ -7,7 +7,6 @@ import {
   SignedOut,
   UserButton,
 } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -34,16 +33,15 @@ export default function RootLayout({
   return (
     <ClerkProvider
       appearance={{
-        baseTheme: dark,
         variables: {
-          colorPrimary: "#fff",
-          colorBackground: "#0a0a0a",
-          colorText: "#fafafa",
-          colorTextSecondary: "#a1a1aa",
+          colorPrimary: "#0a0a0a",
+          colorBackground: "#ffffff",
+          colorText: "#0a0a0a",
+          colorTextSecondary: "#71717a",
           borderRadius: "0.5rem",
         },
         elements: {
-          card: "bg-background border border-border shadow-none",
+          card: "bg-background border border-border shadow-sm",
           headerTitle: "text-foreground",
           headerSubtitle: "text-muted-foreground",
           socialButtonsBlockButton:
@@ -54,7 +52,7 @@ export default function RootLayout({
         },
       }}
     >
-      <html lang="en" className="dark">
+      <html lang="en">
         <body
           className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
         >
@@ -84,16 +82,7 @@ export default function RootLayout({
             </div>
           </header>
           {children}
-          <Toaster
-            position="top-center"
-            toastOptions={{
-              style: {
-                background: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                color: "hsl(var(--foreground))",
-              },
-            }}
-          />
+          <Toaster position="top-center" />
         </body>
       </html>
     </ClerkProvider>
