@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { LanguageBadge } from "./language-badge";
 import { type LanguageCode } from "@/lib/constants/languages";
-import { Languages } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Languages, Loader2 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface MessageBubbleProps {
   content: string;
@@ -17,6 +16,7 @@ interface MessageBubbleProps {
   isOwnMessage: boolean;
   showHeader: boolean;
   userLanguage: LanguageCode;
+  isTranslating?: boolean;
 }
 
 export function MessageBubble({
@@ -24,63 +24,111 @@ export function MessageBubble({
   translatedContent,
   originalLanguage,
   userName,
+  userImageUrl,
   timestamp,
   isOwnMessage,
   showHeader,
   userLanguage,
+  isTranslating = false,
 }: MessageBubbleProps) {
   const [showOriginal, setShowOriginal] = useState(false);
 
-  const isTranslated = originalLanguage !== userLanguage && translatedContent;
+  const needsTranslation = originalLanguage !== userLanguage;
+  const hasTranslation = needsTranslation && translatedContent;
   const displayContent =
-    isTranslated && !showOriginal ? translatedContent : content;
+    hasTranslation && !showOriginal ? translatedContent : content;
+
+  const initials = userName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <div
-      className={cn("flex mt-2", isOwnMessage ? "justify-end" : "justify-start")}
+      className={cn(
+        "flex gap-2.5 mb-3",
+        isOwnMessage ? "justify-end" : "justify-start"
+      )}
     >
+      {/* Avatar for other users - aligned to bottom */}
+      {!isOwnMessage && (
+        <div className="flex flex-col justify-end">
+          {showHeader ? (
+            <Avatar className="h-8 w-8 flex-shrink-0">
+              <AvatarImage src={userImageUrl || undefined} alt={userName} />
+              <AvatarFallback className="text-xs bg-gradient-to-br from-blue-400 to-blue-600 text-white">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+          ) : (
+            <div className="w-8 flex-shrink-0" />
+          )}
+        </div>
+      )}
+
       <div
-        className={cn("max-w-[75%] w-fit flex flex-col gap-1", {
+        className={cn("max-w-[280px] flex flex-col gap-1", {
           "items-end": isOwnMessage,
+          "items-start": !isOwnMessage,
         })}
       >
-        {showHeader && (
-          <div
-            className={cn("flex items-center gap-2 text-xs px-3", {
-              "justify-end flex-row-reverse": isOwnMessage,
-            })}
-          >
-            <span className="font-medium">{userName}</span>
-            <LanguageBadge language={originalLanguage} size="sm" />
-            <span className="text-foreground/50 text-xs">
+        {/* Name and time - only for others */}
+        {showHeader && !isOwnMessage && (
+          <div className="flex items-center gap-2 text-xs px-1 mb-0.5">
+            <span className="font-medium text-muted-foreground">{userName}</span>
+            <span className="text-muted-foreground/60">
               {new Date(timestamp).toLocaleTimeString("en-US", {
-                hour: "2-digit",
+                hour: "numeric",
                 minute: "2-digit",
                 hour12: true,
               })}
             </span>
           </div>
         )}
+
+        {/* Message bubble */}
         <div
           className={cn(
-            "py-2 px-3 rounded-xl text-sm w-fit",
+            "py-3 px-4 text-[15px] leading-relaxed rounded-2xl",
             isOwnMessage
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-foreground"
+              ? "bg-blue-50 text-blue-600 rounded-br-md"
+              : "bg-muted/60 text-foreground rounded-bl-md"
           )}
         >
           {displayContent}
         </div>
-        {isTranslated && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-xs gap-1 text-muted-foreground"
-            onClick={() => setShowOriginal(!showOriginal)}
-          >
-            <Languages className="h-3 w-3" />
-            {showOriginal ? "Show translation" : "Show original"}
-          </Button>
+
+        {/* Translation controls */}
+        {needsTranslation && (
+          <div className="flex items-center px-1">
+            {isTranslating ? (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Translating...</span>
+              </div>
+            ) : hasTranslation ? (
+              <button
+                className="flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+                onClick={() => setShowOriginal(!showOriginal)}
+              >
+                <Languages className="h-3 w-3" />
+                {showOriginal ? "Show translation" : "Show original"}
+              </button>
+            ) : null}
+          </div>
+        )}
+
+        {/* Time for own messages */}
+        {isOwnMessage && showHeader && (
+          <span className="text-[10px] text-muted-foreground/60 px-1">
+            {new Date(timestamp).toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            })}
+          </span>
         )}
       </div>
     </div>
