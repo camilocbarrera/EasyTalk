@@ -7,7 +7,7 @@ import {
   SignedOut,
   UserButton,
 } from "@clerk/nextjs";
-import { shadesOfPurple } from "@clerk/themes";
+import { dark } from "@clerk/themes";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "EasyTalk",
-  description: "Real-time chat application",
+  description: "Real-time multilingual chat - everyone speaks their native language",
 };
 
 export default function RootLayout({
@@ -32,21 +32,68 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider appearance={{ baseTheme: shadesOfPurple }}>
-      <html lang="en">
+    <ClerkProvider
+      appearance={{
+        baseTheme: dark,
+        variables: {
+          colorPrimary: "#fff",
+          colorBackground: "#0a0a0a",
+          colorText: "#fafafa",
+          colorTextSecondary: "#a1a1aa",
+          borderRadius: "0.5rem",
+        },
+        elements: {
+          card: "bg-background border border-border shadow-none",
+          headerTitle: "text-foreground",
+          headerSubtitle: "text-muted-foreground",
+          socialButtonsBlockButton:
+            "border border-border bg-background hover:bg-accent",
+          formFieldInput:
+            "bg-background border-border focus:border-foreground",
+          footerActionLink: "text-foreground hover:text-foreground/80",
+        },
+      }}
+    >
+      <html lang="en" className="dark">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
         >
-          <header className="flex items-center justify-end p-4 gap-4 absolute top-0 right-0 z-50">
-            <SignedOut>
-              <SignInButton mode="modal" />
-            </SignedOut>
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
+          <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 sm:px-12 lg:px-20">
+            <div className="text-sm font-medium tracking-tight text-foreground/60">
+              <SignedIn>
+                <span>EasyTalk</span>
+              </SignedIn>
+            </div>
+            <div className="flex items-center gap-4">
+              <SignedOut>
+                <SignInButton mode="modal">
+                  <button className="text-sm font-medium text-foreground/60 hover:text-foreground transition-colors">
+                    Sign in
+                  </button>
+                </SignInButton>
+              </SignedOut>
+              <SignedIn>
+                <UserButton
+                  appearance={{
+                    elements: {
+                      avatarBox: "size-8",
+                    },
+                  }}
+                />
+              </SignedIn>
+            </div>
           </header>
           {children}
-          <Toaster position="top-center" />
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              style: {
+                background: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                color: "hsl(var(--foreground))",
+              },
+            }}
+          />
         </body>
       </html>
     </ClerkProvider>
