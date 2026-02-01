@@ -1,13 +1,5 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,63 +18,85 @@ interface SessionCardProps {
 }
 
 export function SessionCard({ session, onShare }: SessionCardProps) {
-  const isExpired = session.expiresAt ? new Date(session.expiresAt) < new Date() : false;
+  const isExpired = session.expiresAt
+    ? new Date(session.expiresAt) < new Date()
+    : false;
 
   return (
-    <Card className={isExpired ? "opacity-60" : ""}>
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="text-lg">{session.name}</CardTitle>
-            <CardDescription className="font-mono text-xs">
-              Code: {session.code}
-            </CardDescription>
-          </div>
-          {isExpired && <Badge variant="destructive">Expired</Badge>}
+    <div
+      className={`group relative flex flex-col rounded-lg border bg-card p-4 transition-colors hover:border-foreground/20 ${
+        isExpired ? "opacity-50" : ""
+      }`}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-foreground truncate">
+            {session.name}
+          </h3>
+          <p className="font-mono text-xs text-muted-foreground mt-0.5 tracking-wider">
+            {session.code}
+          </p>
         </div>
-      </CardHeader>
-      <CardContent className="pb-2">
-        <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <div className="flex -space-x-2">
-            {session.participants.slice(0, 5).map(({ user }) => (
-              <Avatar key={user.id} className="h-6 w-6 border-2 border-background">
-                <AvatarImage src={user.imageUrl || undefined} />
-                <AvatarFallback className="text-[10px]">
-                  {user.firstName?.[0] || user.username?.[0] || "?"}
-                </AvatarFallback>
-              </Avatar>
-            ))}
-            {session.participants.length > 5 && (
-              <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px] border-2 border-background">
-                +{session.participants.length - 5}
-              </div>
-            )}
-          </div>
-          <span className="text-xs text-muted-foreground">
-            {session.participants.length} participant
-            {session.participants.length !== 1 ? "s" : ""}
-          </span>
+        {isExpired && (
+          <Badge variant="outline" className="shrink-0 text-xs">
+            Expired
+          </Badge>
+        )}
+      </div>
+
+      {/* Participants */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex -space-x-1.5">
+          {session.participants.slice(0, 4).map(({ user }) => (
+            <Avatar
+              key={user.id}
+              className="size-6 border-2 border-card ring-0"
+            >
+              <AvatarImage src={user.imageUrl || undefined} />
+              <AvatarFallback className="text-[10px] bg-muted">
+                {user.firstName?.[0] || user.username?.[0] || "?"}
+              </AvatarFallback>
+            </Avatar>
+          ))}
+          {session.participants.length > 4 && (
+            <div className="size-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium border-2 border-card">
+              +{session.participants.length - 4}
+            </div>
+          )}
         </div>
-      </CardContent>
-      <CardFooter className="gap-2">
+        <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <Users className="size-3" />
+          {session.participants.length}
+        </span>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 mt-auto pt-3 border-t border-border">
         {onShare && (
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon-sm"
             onClick={() => onShare(session)}
             disabled={isExpired}
+            className="text-muted-foreground hover:text-foreground"
           >
-            <Share2 className="h-4 w-4" />
+            <Share2 className="size-4" />
           </Button>
         )}
-        <Button asChild size="sm" className="flex-1" disabled={isExpired}>
+        <Button
+          asChild
+          size="sm"
+          variant="ghost"
+          className="flex-1 justify-between text-muted-foreground hover:text-foreground"
+          disabled={isExpired}
+        >
           <Link href={`/session/${session.id}`}>
-            Enter Chat
-            <ArrowRight className="h-4 w-4 ml-2" />
+            <span>Enter</span>
+            <ArrowRight className="size-4" />
           </Link>
         </Button>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 }
