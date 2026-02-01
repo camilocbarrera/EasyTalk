@@ -4,15 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 export function JoinSessionForm() {
@@ -42,47 +34,53 @@ export function JoinSessionForm() {
       }
 
       const session = await res.json();
-      toast.success(session.alreadyJoined ? "Rejoining session..." : "Joined session!");
+      toast.success(
+        session.alreadyJoined ? "Rejoining session..." : "Joined session!"
+      );
       router.push(`/session/${session.id}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to join session");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to join session"
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card>
-      <form onSubmit={handleSubmit}>
-        <CardHeader>
-          <CardTitle>Join a Session</CardTitle>
-          <CardDescription>
-            Enter an 8-character session code
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Input
-            placeholder="ABCD1234"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            maxLength={8}
-            className="font-mono text-center text-lg tracking-wider"
-            disabled={isLoading}
-          />
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Joining...
-              </>
-            ) : (
-              "Join Session"
-            )}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="space-y-1.5">
+        <label
+          htmlFor="session-code"
+          className="text-sm font-medium text-foreground"
+        >
+          Join a session
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Enter an 8-character session code
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <Input
+          id="session-code"
+          placeholder="ABCD1234"
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          maxLength={8}
+          className="flex-1 font-mono text-center tracking-[0.25em] uppercase"
+          disabled={isLoading}
+        />
+        <Button type="submit" disabled={isLoading} className="shrink-0">
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <>
+              <ArrowRight className="h-4 w-4" />
+              <span className="sr-only sm:not-sr-only sm:ml-2">Join</span>
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
   );
 }
