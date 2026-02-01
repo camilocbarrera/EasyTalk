@@ -23,6 +23,36 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "EasyTalk",
   description: "Real-time multilingual chat - everyone speaks their native language",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  openGraph: {
+    title: "EasyTalk",
+    description: "Speak Your Language. Connect with Everyone. Real-time chat that automatically translates every message.",
+    url: "https://easytalk.app",
+    siteName: "EasyTalk",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "EasyTalk - Real-time multilingual chat",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "EasyTalk",
+    description: "Speak Your Language. Connect with Everyone. Real-time chat that automatically translates every message.",
+    images: ["/og-twitter.png"],
+  },
 };
 
 export default function RootLayout({
