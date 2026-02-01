@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SessionCard } from "@/components/session/session-card";
 import { ShareDialog } from "@/components/session/share-dialog";
 import { LanguageSelector } from "@/components/user/language-selector";
-import { Plus, Settings } from "lucide-react";
+import { Plus, Globe } from "lucide-react";
 import Link from "next/link";
 import type { Session, User, SessionParticipant } from "@/lib/db/schema";
 import type { LanguageCode } from "@/lib/constants/languages";
@@ -24,9 +24,8 @@ export default function DashboardPage() {
   const [sessions, setSessions] = useState<SessionWithRelations[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userLanguage, setUserLanguage] = useState<LanguageCode>("en");
-  const [shareSession, setShareSession] = useState<SessionWithRelations | null>(
-    null
-  );
+  const [shareSession, setShareSession] =
+    useState<SessionWithRelations | null>(null);
 
   useEffect(() => {
     if (isSignedIn) {
@@ -63,12 +62,12 @@ export default function DashboardPage() {
 
   if (!isLoaded || isLoading) {
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-black p-4 pt-20">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <Skeleton className="h-10 w-48" />
+      <div className="min-h-screen bg-background p-6 pt-24 sm:px-12 lg:px-20">
+        <div className="max-w-4xl mx-auto space-y-8">
+          <Skeleton className="h-8 w-48" />
           <div className="grid gap-4 sm:grid-cols-2">
             {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-48" />
+              <Skeleton key={i} className="h-40 rounded-lg" />
             ))}
           </div>
         </div>
@@ -82,25 +81,30 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black p-4 pt-20">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background p-6 pt-24 sm:px-12 lg:px-20">
+      <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            My Sessions
-          </h1>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Settings className="h-4 w-4 text-muted-foreground" />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Sessions
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Manage your chat sessions
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm">
+              <Globe className="h-4 w-4 text-muted-foreground" />
               <LanguageSelector
                 value={userLanguage}
                 onChange={handleLanguageChange}
               />
             </div>
-            <Button asChild>
+            <Button asChild size="sm">
               <Link href="/session/new">
-                <Plus className="h-4 w-4 mr-2" />
-                New Session
+                <Plus className="h-4 w-4" />
+                <span className="ml-2">New</span>
               </Link>
             </Button>
           </div>
@@ -108,9 +112,12 @@ export default function DashboardPage() {
 
         {/* Sessions Grid */}
         {sessions.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-zinc-600 dark:text-zinc-400 mb-4">
-              You haven&apos;t joined any sessions yet.
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <Globe className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-muted-foreground mb-6">
+              No sessions yet. Create one to get started.
             </p>
             <Button asChild>
               <Link href="/">Create or Join a Session</Link>
