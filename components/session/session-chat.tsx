@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { useChatScroll } from "@/hooks/use-chat-scroll";
@@ -9,9 +9,19 @@ import {
   type ChatMessageWithTranslation,
 } from "@/hooks/use-session-chat";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Send, Wifi, WifiOff } from "lucide-react";
-import type { LanguageCode } from "@/lib/constants/languages";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Send, MessageCircle, Globe } from "lucide-react";
+import {
+  SUPPORTED_LANGUAGES,
+  type LanguageCode,
+} from "@/lib/constants/languages";
+import { LANGUAGE_FLAGS } from "@/components/chat/language-badge";
 
 interface SessionChatProps {
   sessionId: string;
@@ -41,11 +51,17 @@ export function SessionChat({
   userId,
   userName,
   userImageUrl,
-  userLanguage,
+  userLanguage: initialUserLanguage,
   initialMessages,
 }: SessionChatProps) {
   const { containerRef, scrollToBottom } = useChatScroll();
   const [newMessage, setNewMessage] = useState("");
+  const [currentLanguage, setCurrentLanguage] =
+    useState<LanguageCode>(initialUserLanguage);
+  const [pendingTranslations, setPendingTranslations] = useState<Set<string>>(
+    new Set()
+  );
+  const [isPending, startTransition] = useTransition();
 
   const {
     messages,
@@ -58,7 +74,7 @@ export function SessionChat({
     userId,
     userName,
     userImageUrl,
-    userLanguage,
+    userLanguage: currentLanguage,
   });
 
   // Load initial messages on mount
@@ -71,6 +87,19 @@ export function SessionChat({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // Track pending translations for messages that need them
+  useEffect(() => {
+    const newPending = new Set<string>();
+    for (const message of messages) {
+      const needsTranslation = message.originalLanguage !== currentLanguage;
+      const hasTranslation = message.translations[currentLanguage];
+      if (needsTranslation && !hasTranslation) {
+        newPending.add(message.id);
+      }
+    }
+    setPendingTranslations(newPending);
+  }, [messages, currentLanguage]);
+
   const handleSendMessage = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -82,106 +111,156 @@ export function SessionChat({
     [newMessage, isConnected, sendMessage]
   );
 
+  const handleLanguageChange = useCallback((language: LanguageCode) => {
+    setCurrentLanguage(language);
+
+    // Persist to user preferences
+    startTransition(async () => {
+      try {
+        await fetch("/api/users/me/language", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ language }),
+        });
+      } catch (error) {
+        console.error("Failed to update language preference:", error);
+      }
+    });
+  }, []);
+
   const getTranslatedContent = (
     message: ChatMessageWithTranslation
   ): string | undefined => {
-    if (message.originalLanguage === userLanguage) {
+    if (message.originalLanguage === currentLanguage) {
       return undefined;
     }
-    return message.translations[userLanguage];
+    return message.translations[currentLanguage];
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-background text-foreground antialiased">
-      {/* Connection status */}
-      <div
-        className={cn(
-          "flex items-center justify-center gap-2 py-1 text-xs transition-colors",
-          isConnected
-            ? "bg-green-500/10 text-green-600 dark:text-green-400"
-            : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-        )}
-      >
-        {isConnected ? (
-          <>
-            <Wifi className="h-3 w-3" />
-            Connected
-            {onlineUsers.length > 0 && ` - ${onlineUsers.length} online`}
-          </>
-        ) : (
-          <>
-            <WifiOff className="h-3 w-3" />
-            Connecting...
-          </>
-        )}
-      </div>
-
-      {/* Messages */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="text-center text-sm text-muted-foreground py-8">
-            No messages yet. Start the conversation!
+    <div className="flex flex-col h-full w-full bg-muted/30 antialiased">
+      {/* Chat container - constrained width */}
+      <div className="flex flex-col h-full w-full max-w-lg mx-auto bg-background shadow-sm">
+        {/* Header bar */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                "h-2 w-2 rounded-full",
+                isConnected ? "bg-green-500" : "bg-yellow-500 animate-pulse"
+              )}
+            />
+            <span className="text-sm text-muted-foreground">
+              {isConnected
+                ? onlineUsers.length > 0
+                  ? `${onlineUsers.length} online`
+                  : "Connected"
+                : "Connecting..."}
+            </span>
           </div>
-        ) : (
-          <div className="space-y-1">
-            {messages.map((message, index) => {
-              const prevMessage = index > 0 ? messages[index - 1] : null;
-              const showHeader =
-                !prevMessage || prevMessage.user.id !== message.user.id;
 
-              return (
-                <div
-                  key={message.id}
-                  className="animate-in fade-in slide-in-from-bottom-4 duration-300"
-                >
-                  <MessageBubble
-                    content={message.content}
-                    translatedContent={getTranslatedContent(message)}
-                    originalLanguage={message.originalLanguage}
-                    userName={message.user.name}
-                    userImageUrl={message.user.imageUrl}
-                    timestamp={message.createdAt}
-                    isOwnMessage={message.user.id === userId}
-                    showHeader={showHeader}
-                    userLanguage={userLanguage}
-                  />
-                </div>
-              );
-            })}
+          {/* Language selector */}
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            <Select
+              value={currentLanguage}
+              onValueChange={(value) =>
+                handleLanguageChange(value as LanguageCode)
+              }
+              disabled={isPending}
+            >
+              <SelectTrigger className="h-8 w-[130px] text-xs border-0 bg-muted/50">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(SUPPORTED_LANGUAGES).map(([code, name]) => (
+                  <SelectItem key={code} value={code} className="text-xs">
+                    <span className="flex items-center gap-2">
+                      <span>{LANGUAGE_FLAGS[code as LanguageCode]}</span>
+                      <span>{name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Input */}
-      <form
-        onSubmit={handleSendMessage}
-        className="flex w-full gap-2 border-t border-border p-4"
-      >
-        <Input
-          className={cn(
-            "rounded-full bg-background text-sm transition-all duration-300",
-            isConnected && newMessage.trim()
-              ? "w-[calc(100%-44px)]"
-              : "w-full"
+        {/* Messages area */}
+        <div
+          ref={containerRef}
+          className="flex-1 overflow-y-auto px-4 py-4"
+        >
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+                <MessageCircle className="h-8 w-8 opacity-50" />
+              </div>
+              <p className="text-sm font-medium">No messages yet</p>
+              <p className="text-xs opacity-70 mt-1">Start the conversation!</p>
+            </div>
+          ) : (
+            <div>
+              {messages.map((message, index) => {
+                const prevMessage = index > 0 ? messages[index - 1] : null;
+                const showHeader =
+                  !prevMessage || prevMessage.user.id !== message.user.id;
+
+                return (
+                  <div
+                    key={message.id}
+                    className="animate-in fade-in slide-in-from-bottom-1 duration-200"
+                  >
+                    <MessageBubble
+                      content={message.content}
+                      translatedContent={getTranslatedContent(message)}
+                      originalLanguage={message.originalLanguage}
+                      userName={message.user.name}
+                      userImageUrl={message.user.imageUrl}
+                      timestamp={message.createdAt}
+                      isOwnMessage={message.user.id === userId}
+                      showHeader={showHeader}
+                      userLanguage={currentLanguage}
+                      isTranslating={pendingTranslations.has(message.id)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder={
-            isConnected ? "Type a message..." : "Connecting..."
-          }
-          disabled={!isConnected}
-        />
-        {isConnected && newMessage.trim() && (
-          <Button
-            className="aspect-square rounded-full animate-in fade-in slide-in-from-right-4 duration-300"
-            type="submit"
-            disabled={!isConnected}
-          >
-            <Send className="size-4" />
-          </Button>
-        )}
-      </form>
+        </div>
+
+        {/* Input area */}
+        <form
+          onSubmit={handleSendMessage}
+          className="p-4 border-t border-border/50"
+        >
+          <div className="flex items-center gap-2 bg-muted/40 rounded-full px-4 py-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder={isConnected ? "Type a message..." : "Connecting..."}
+              disabled={!isConnected}
+              className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground/60 focus:outline-none disabled:cursor-not-allowed"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              variant="ghost"
+              disabled={!isConnected || !newMessage.trim()}
+              className={cn(
+                "h-8 w-8 rounded-full transition-all",
+                newMessage.trim()
+                  ? "bg-foreground text-background hover:bg-foreground/90"
+                  : "text-muted-foreground"
+              )}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
