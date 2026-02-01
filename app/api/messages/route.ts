@@ -81,6 +81,7 @@ export async function POST(req: Request) {
   // Translate in background (don't block response)
   if (participantLanguages.length > 0) {
     translateMessageForParticipants(
+      sessionId,
       message.id,
       content,
       originalLanguage,
