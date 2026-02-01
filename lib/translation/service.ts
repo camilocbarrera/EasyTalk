@@ -3,6 +3,7 @@ import { createGroq } from "@ai-sdk/groq";
 import { db, translations, type NewTranslation } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { SUPPORTED_LANGUAGES, type LanguageCode } from "@/lib/constants/languages";
+import { broadcastTranslation } from "@/lib/supabase/broadcast";
 
 export { SUPPORTED_LANGUAGES, type LanguageCode } from "@/lib/constants/languages";
 
@@ -35,7 +36,7 @@ export async function translateMessage(
 
   // Call GROQ for translation
   const { text: translatedContent } = await generateText({
-    model: groq("llama-3.3-70b-versatile"),
+    model: groq("openai/gpt-oss-20b"),
     prompt: `Translate the following text from ${SUPPORTED_LANGUAGES[sourceLanguage]} to ${SUPPORTED_LANGUAGES[targetLanguage]}.
 Only respond with the translation, no explanations or additional text.
 
@@ -57,7 +58,7 @@ ${content}`,
 
 export async function detectLanguage(content: string): Promise<LanguageCode> {
   const { text } = await generateText({
-    model: groq("llama-3.3-70b-versatile"),
+    model: groq("openai/gpt-oss-20b"),
     prompt: `Detect the language of the following text and respond with ONLY the ISO 639-1 language code (e.g., en, es, fr, de, it, pt, zh, ja, ko, ar, ru, hi).
 
 Text:
@@ -93,6 +94,7 @@ export async function getTranslationsForMessage(
 }
 
 export async function translateMessageForParticipants(
+  sessionId: string,
   messageId: string,
   content: string,
   sourceLanguage: LanguageCode,
@@ -115,6 +117,9 @@ export async function translateMessageForParticipants(
         targetLanguage
       );
       results[targetLanguage] = translated;
+
+      // Broadcast translation to connected clients
+      await broadcastTranslation(sessionId, messageId, targetLanguage, translated);
     })
   );
 
