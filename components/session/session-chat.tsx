@@ -13,7 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Send, MessageCircle, Globe, ArrowDown, Languages } from "lucide-react";
+import { Send, Globe, ArrowDown, Languages } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   SUPPORTED_LANGUAGES,
   type LanguageCode,
@@ -142,22 +149,51 @@ export function SessionChat({
       <div className="flex flex-col h-full w-full max-w-lg mx-auto bg-background shadow-sm">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center gap-2">
-            <div
-              className={cn(
-                "h-2 w-2 rounded-full transition-colors",
-                isConnected ? "bg-emerald-500" : "bg-amber-500 animate-pulse"
-              )}
-            />
-            <span className="text-sm text-muted-foreground">
-              {isConnected
-                ? onlineUsers.length > 0
-                  ? `${onlineUsers.length} online`
-                  : "Connected"
-                : "Connecting..."}
-            </span>
+          {/* Online users */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center">
+              <div
+                className={cn(
+                  "h-2 w-2 rounded-full transition-colors",
+                  isConnected ? "bg-emerald-500" : "bg-amber-500 animate-pulse"
+                )}
+              />
+            </div>
+
+            {/* Online user avatars */}
+            {onlineUsers.length > 0 ? (
+              <TooltipProvider>
+                <div className="flex -space-x-2">
+                  {onlineUsers.slice(0, 5).map((user) => (
+                    <Tooltip key={user.id}>
+                      <TooltipTrigger asChild>
+                        <Avatar className="h-7 w-7 ring-2 ring-background cursor-pointer hover:z-10 hover:scale-110 transition-transform">
+                          <AvatarImage src={user.imageUrl} alt={user.name} />
+                          <AvatarFallback className="text-[10px] bg-gradient-to-br from-violet-500 to-purple-600 text-white font-medium">
+                            {user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">
+                        {user.name}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                  {onlineUsers.length > 5 && (
+                    <div className="h-7 w-7 rounded-full bg-muted ring-2 ring-background flex items-center justify-center text-[10px] text-muted-foreground font-medium">
+                      +{onlineUsers.length - 5}
+                    </div>
+                  )}
+                </div>
+              </TooltipProvider>
+            ) : (
+              <span className="text-sm text-muted-foreground">
+                {isConnected ? "Connected" : "Connecting..."}
+              </span>
+            )}
           </div>
 
+          {/* Language selector */}
           <div className="flex items-center gap-2">
             <Globe className="h-4 w-4 text-muted-foreground" />
             <Select
