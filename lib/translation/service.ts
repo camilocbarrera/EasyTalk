@@ -12,7 +12,7 @@ const groq = createGroq({
 });
 
 // Use faster model for translations
-const TRANSLATION_MODEL = "llama-3.1-8b-instant";
+const TRANSLATION_MODEL = "openai/gpt-oss-20b";
 
 export async function translateMessage(
   messageId: string,
