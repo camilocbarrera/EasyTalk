@@ -143,3 +143,22 @@ html {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+/* Remove focus outline from textareas in chat */
+textarea:focus {
+  outline: none;
+}
+
+/* Typing dot bounce animation */
+@keyframes typing-dot-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-typing-dot-bounce {
+  animation: typing-dot-bounce 1s ease-in-out infinite;
+}

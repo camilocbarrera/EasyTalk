@@ -1,5 +1,6 @@
-import { generateText } from "ai";
+import { generateText, generateObject } from "ai";
 import { createGroq } from "@ai-sdk/groq";
+import { z } from "zod";
 import { db, translations, type NewTranslation } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { SUPPORTED_LANGUAGES, type LanguageCode } from "@/lib/constants/languages";
@@ -11,8 +12,23 @@ const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// Use faster model for translations
 const TRANSLATION_MODEL = "openai/gpt-oss-20b";
+
+// Schema for all translations response
+const translationsSchema = z.object({
+  en: z.string().describe("English translation"),
+  es: z.string().describe("Spanish translation"),
+  fr: z.string().describe("French translation"),
+  de: z.string().describe("German translation"),
+  it: z.string().describe("Italian translation"),
+  pt: z.string().describe("Portuguese translation"),
+  zh: z.string().describe("Chinese translation"),
+  ja: z.string().describe("Japanese translation"),
+  ko: z.string().describe("Korean translation"),
+  ar: z.string().describe("Arabic translation"),
+  ru: z.string().describe("Russian translation"),
+  hi: z.string().describe("Hindi translation"),
+});
 
 export async function translateMessage(
   messageId: string,
@@ -20,12 +36,10 @@ export async function translateMessage(
   sourceLanguage: LanguageCode,
   targetLanguage: LanguageCode
 ): Promise<string> {
-  // Don't translate if same language
   if (sourceLanguage === targetLanguage) {
     return content;
   }
 
-  // Check cache first
   const cached = await db.query.translations.findFirst({
     where: and(
       eq(translations.messageId, messageId),
@@ -37,7 +51,6 @@ export async function translateMessage(
     return cached.translatedContent;
   }
 
-  // Call GROQ for translation
   const { text: translatedContent } = await generateText({
     model: groq(TRANSLATION_MODEL),
     prompt: `Translate the following text from ${SUPPORTED_LANGUAGES[sourceLanguage]} to ${SUPPORTED_LANGUAGES[targetLanguage]}.
@@ -47,7 +60,6 @@ Text to translate:
 ${content}`,
   });
 
-  // Store in cache
   const newTranslation: NewTranslation = {
     messageId,
     targetLanguage,
@@ -70,12 +82,10 @@ ${content}`,
 
   const detectedCode = text.trim().toLowerCase() as LanguageCode;
 
-  // Validate that it's a supported language
   if (detectedCode in SUPPORTED_LANGUAGES) {
     return detectedCode;
   }
 
-  // Default to English if detection fails
   return "en";
 }
 
@@ -96,84 +106,50 @@ export async function getTranslationsForMessage(
   return result as Record<LanguageCode, string>;
 }
 
-interface LanguageWithPriority {
-  languageCode: LanguageCode;
-  priority: number;
-}
-
-export async function translateMessageForParticipants(
+export async function translateMessageToAllLanguages(
   sessionId: string,
   messageId: string,
   content: string,
-  sourceLanguage: LanguageCode,
-  targetLanguages: LanguageCode[] | LanguageWithPriority[]
+  sourceLanguage: LanguageCode
 ): Promise<Record<LanguageCode, string>> {
-  const results: Partial<Record<LanguageCode, string>> = {};
+  // Single API call to translate to all 12 languages
+  const { object: allTranslations } = await generateObject({
+    model: groq(TRANSLATION_MODEL),
+    schema: translationsSchema,
+    prompt: `Translate the following text from ${SUPPORTED_LANGUAGES[sourceLanguage]} to all 12 languages.
+Keep the original text for ${SUPPORTED_LANGUAGES[sourceLanguage]} (${sourceLanguage}).
 
-  // Normalize input - handle both simple array and priority-based array
-  let languagesWithPriority: LanguageWithPriority[];
+Text to translate:
+${content}`,
+  });
 
-  if (targetLanguages.length > 0 && typeof targetLanguages[0] === "object") {
-    languagesWithPriority = targetLanguages as LanguageWithPriority[];
-  } else {
-    languagesWithPriority = (targetLanguages as LanguageCode[]).map(
-      (languageCode, index) => ({ languageCode, priority: index })
-    );
+  // Save all translations to DB
+  const allLanguages = Object.keys(SUPPORTED_LANGUAGES) as LanguageCode[];
+  const translationsToInsert: NewTranslation[] = [];
+
+  for (const lang of allLanguages) {
+    if (lang === sourceLanguage) continue;
+
+    translationsToInsert.push({
+      messageId,
+      targetLanguage: lang,
+      translatedContent: allTranslations[lang],
+    });
   }
 
-  // Filter out source language and get unique targets, sorted by priority
-  const uniqueTargets = languagesWithPriority
-    .filter((lang) => lang.languageCode !== sourceLanguage)
-    .sort((a, b) => a.priority - b.priority)
-    .reduce((acc, lang) => {
-      if (!acc.some((l) => l.languageCode === lang.languageCode)) {
-        acc.push(lang);
-      }
-      return acc;
-    }, [] as LanguageWithPriority[]);
-
-  // Translate primary languages first (priority 0), then secondary
-  const primaryLanguages = uniqueTargets.filter((l) => l.priority === 0);
-  const secondaryLanguages = uniqueTargets.filter((l) => l.priority > 0);
-
-  // Translate primary languages first (in parallel)
-  if (primaryLanguages.length > 0) {
-    await Promise.all(
-      primaryLanguages.map(async ({ languageCode }) => {
-        const translated = await translateMessage(
-          messageId,
-          content,
-          sourceLanguage,
-          languageCode
-        );
-        results[languageCode] = translated;
-
-        // Broadcast translation to connected clients
-        await broadcastTranslation(sessionId, messageId, languageCode, translated);
-      })
-    );
+  // Batch insert all translations
+  if (translationsToInsert.length > 0) {
+    await db.insert(translations).values(translationsToInsert);
   }
 
-  // Then translate secondary languages (in parallel)
-  if (secondaryLanguages.length > 0) {
-    await Promise.all(
-      secondaryLanguages.map(async ({ languageCode }) => {
-        const translated = await translateMessage(
-          messageId,
-          content,
-          sourceLanguage,
-          languageCode
-        );
-        results[languageCode] = translated;
+  // Broadcast all translations to clients
+  console.log(`[Translation] Broadcasting ${translationsToInsert.length} translations for message ${messageId}`);
+  await Promise.all(
+    translationsToInsert.map(({ targetLanguage, translatedContent }) =>
+      broadcastTranslation(sessionId, messageId, targetLanguage, translatedContent)
+    )
+  );
+  console.log(`[Translation] Broadcasts complete for message ${messageId}`);
 
-        // Broadcast translation to connected clients
-        await broadcastTranslation(sessionId, messageId, languageCode, translated);
-      })
-    );
-  }
-
-  // Include original for source language
-  results[sourceLanguage] = content;
-
-  return results as Record<LanguageCode, string>;
+  return allTranslations;
 }

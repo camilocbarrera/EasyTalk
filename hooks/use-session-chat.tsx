@@ -36,6 +36,10 @@ interface PresenceState {
 const EVENT_MESSAGE = "new-message";
 const EVENT_TRANSLATION = "translation";
 
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+}
+
 export function useSessionChat({
   sessionId,
   userId,
@@ -63,10 +67,10 @@ export function useSessionChat({
       },
     });
 
-    // Handle new messages
+    // Handle new messages from other users
     newChannel.on("broadcast", { event: EVENT_MESSAGE }, (payload) => {
       const message = payload.payload as ChatMessageWithTranslation;
-      // Skip if we already have this message (sender sees it immediately)
+      // Skip if we already have this message
       if (messageIdsRef.current.has(message.id)) {
         return;
       }
@@ -74,7 +78,7 @@ export function useSessionChat({
       setMessages((current) => [...current, message]);
     });
 
-    // Handle translations
+    // Handle translation updates (real-time from server)
     newChannel.on("broadcast", { event: EVENT_TRANSLATION }, (payload) => {
       const { messageId, language, content } = payload.payload as {
         messageId: string;
@@ -82,8 +86,10 @@ export function useSessionChat({
         content: string;
       };
 
-      setMessages((current) =>
-        current.map((msg) =>
+      console.log(`[Client] Received translation: ${language} for message ${messageId}`);
+
+      setMessages((current) => {
+        const updated = current.map((msg) =>
           msg.id === messageId
             ? {
                 ...msg,
@@ -93,8 +99,9 @@ export function useSessionChat({
                 },
               }
             : msg
-        )
-      );
+        );
+        return updated;
+      });
     });
 
     // Handle presence
@@ -114,7 +121,6 @@ export function useSessionChat({
     newChannel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
         setIsConnected(true);
-        // Track presence with multiple languages
         await newChannel.track({
           id: userId,
           name: userName,
@@ -138,8 +144,8 @@ export function useSessionChat({
       const channel = channelRef.current;
       if (!channel || !isConnected || !content.trim()) return;
 
-      const tempId = crypto.randomUUID();
-      const message: ChatMessageWithTranslation = {
+      const tempId = generateId();
+      const optimisticMessage: ChatMessageWithTranslation = {
         id: tempId,
         content: content.trim(),
         originalLanguage: primaryLanguage,
@@ -153,18 +159,10 @@ export function useSessionChat({
         createdAt: new Date().toISOString(),
       };
 
-      // Add to local state immediately for sender
+      // Add to local state immediately (optimistic update)
       messageIdsRef.current.add(tempId);
-      setMessages((current) => [...current, message]);
+      setMessages((current) => [...current, optimisticMessage]);
 
-      // Broadcast to other users
-      await channel.send({
-        type: "broadcast",
-        event: EVENT_MESSAGE,
-        payload: message,
-      });
-
-      // Persist to database (which will also trigger translation)
       try {
         const res = await fetch("/api/messages", {
           method: "POST",
@@ -177,35 +175,129 @@ export function useSessionChat({
 
         if (res.ok) {
           const savedMessage = await res.json();
-          // Update the message with the real ID and any translations
+          const realId = savedMessage.id;
+
+          // Update local state with real ID
+          messageIdsRef.current.add(realId);
           setMessages((current) =>
             current.map((msg) =>
               msg.id === tempId
                 ? {
                     ...msg,
-                    id: savedMessage.id,
+                    id: realId,
                     originalLanguage: savedMessage.originalLanguage,
-                    translations: savedMessage.translations?.reduce(
-                      (
-                        acc: Record<string, string>,
-                        t: { targetLanguage: string; translatedContent: string }
-                      ) => ({
-                        ...acc,
-                        [t.targetLanguage]: t.translatedContent,
-                      }),
-                      {}
-                    ) || {},
                   }
                 : msg
             )
           );
+
+          // Broadcast to other users with the real ID
+          await channel.send({
+            type: "broadcast",
+            event: EVENT_MESSAGE,
+            payload: {
+              ...optimisticMessage,
+              id: realId,
+              originalLanguage: savedMessage.originalLanguage,
+            },
+          });
+
+          // Poll for translations until they arrive
+          const pollForTranslations = async (attempts = 0) => {
+            if (attempts > 10) return; // Max 10 attempts (10 seconds)
+
+            await new Promise((r) => setTimeout(r, 1000));
+
+            try {
+              const res = await fetch(`/api/sessions/${sessionId}`);
+              if (!res.ok) return;
+
+              const session = await res.json();
+              const serverMsg = session.messages?.find((m: { id: string }) => m.id === realId);
+
+              if (serverMsg?.translations?.length > 0) {
+                // Translations ready - update state
+                const newTranslations = serverMsg.translations.reduce(
+                  (acc: Record<string, string>, t: { targetLanguage: string; translatedContent: string }) => ({
+                    ...acc,
+                    [t.targetLanguage]: t.translatedContent,
+                  }),
+                  {}
+                );
+
+                setMessages((current) =>
+                  current.map((msg) =>
+                    msg.id === realId
+                      ? { ...msg, translations: newTranslations }
+                      : msg
+                  )
+                );
+              } else {
+                // Keep polling
+                pollForTranslations(attempts + 1);
+              }
+            } catch {
+              pollForTranslations(attempts + 1);
+            }
+          };
+
+          pollForTranslations();
         }
       } catch (error) {
         console.error("Failed to save message:", error);
+        setMessages((current) => current.filter((msg) => msg.id !== tempId));
       }
     },
     [isConnected, sessionId, userId, userName, userImageUrl, primaryLanguage]
   );
+
+  // Fetch latest translations from server
+  const refreshTranslations = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`);
+      if (!res.ok) return;
+
+      const session = await res.json();
+      const serverMessages = session.messages as {
+        id: string;
+        content: string;
+        originalLanguage: string;
+        userId: string;
+        user: {
+          id: string;
+          firstName?: string | null;
+          lastName?: string | null;
+          username?: string | null;
+          imageUrl?: string | null;
+        };
+        translations: { targetLanguage: string; translatedContent: string }[];
+        createdAt: string;
+      }[];
+
+      // Update translations for existing messages
+      setMessages((current) =>
+        current.map((msg) => {
+          const serverMsg = serverMessages.find((m) => m.id === msg.id);
+          if (!serverMsg) return msg;
+
+          const newTranslations = serverMsg.translations.reduce(
+            (acc, t) => ({
+              ...acc,
+              [t.targetLanguage]: t.translatedContent,
+            }),
+            {} as Partial<Record<LanguageCode, string>>
+          );
+
+          return {
+            ...msg,
+            translations: { ...msg.translations, ...newTranslations },
+          };
+        })
+      );
+    } catch (error) {
+      console.error("Failed to refresh translations:", error);
+    }
+  }, [sessionId]);
 
   const addInitialMessages = useCallback(
     (
@@ -261,5 +353,6 @@ export function useSessionChat({
     isConnected,
     onlineUsers,
     addInitialMessages,
+    refreshTranslations,
   };
 }

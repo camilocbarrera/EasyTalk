@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { type LanguageCode } from "@/lib/constants/languages";
-import { Languages } from "lucide-react";
+import { Languages, Dot } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface MessageBubbleProps {
@@ -16,7 +16,6 @@ interface MessageBubbleProps {
   isOwnMessage: boolean;
   showHeader: boolean;
   userLanguage: LanguageCode;
-  showTranslatedByDefault?: boolean;
 }
 
 export function MessageBubble({
@@ -29,14 +28,14 @@ export function MessageBubble({
   isOwnMessage,
   showHeader,
   userLanguage,
-  showTranslatedByDefault = false,
 }: MessageBubbleProps) {
-  const [showOriginal, setShowOriginal] = useState(!showTranslatedByDefault);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   const needsTranslation = originalLanguage !== userLanguage;
   const hasTranslation = translatedContent !== undefined;
+  const isTranslating = needsTranslation && !hasTranslation;
 
-  // Determine what to display
+  // Always show translation when available, unless user toggled to original
   let displayContent: string;
   if (hasTranslation && !showOriginal) {
     displayContent = translatedContent;
@@ -105,6 +104,19 @@ export function MessageBubble({
         >
           {displayContent}
         </div>
+
+        {/* Translating indicator */}
+        {isTranslating && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground px-1">
+            <Languages className="h-3 w-3" />
+            <span>Translating</span>
+            <div className="flex -space-x-2">
+              <Dot className="h-4 w-4 animate-typing-dot-bounce" />
+              <Dot className="h-4 w-4 animate-typing-dot-bounce [animation-delay:150ms]" />
+              <Dot className="h-4 w-4 animate-typing-dot-bounce [animation-delay:300ms]" />
+            </div>
+          </div>
+        )}
 
         {/* Translation toggle - only show if translation exists */}
         {needsTranslation && hasTranslation && (

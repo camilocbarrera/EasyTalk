@@ -3,11 +3,8 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { MessageBubble } from "@/components/chat/message-bubble";
-import { useChatScroll } from "@/hooks/use-chat-scroll";
-import {
-  useSessionChat,
-  type ChatMessageWithTranslation,
-} from "@/hooks/use-session-chat";
+import { useAutoScroll } from "@/hooks/use-auto-scroll";
+import { useSessionChat } from "@/hooks/use-session-chat";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -16,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Send, MessageCircle, Globe } from "lucide-react";
+import { Send, MessageCircle, Globe, ArrowDown, Languages } from "lucide-react";
 import {
   SUPPORTED_LANGUAGES,
   type LanguageCode,
@@ -54,13 +51,11 @@ export function SessionChat({
   userLanguages: initialUserLanguages,
   initialMessages,
 }: SessionChatProps) {
-  const { containerRef, scrollToBottom } = useChatScroll();
   const [newMessage, setNewMessage] = useState("");
   const [userLanguages, setUserLanguages] =
     useState<LanguageCode[]>(initialUserLanguages);
-  const translationRequestedRef = useRef<Set<string>>(new Set());
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Primary language is the first in the array
   const primaryLanguage = userLanguages[0] || "en";
 
   const {
@@ -69,6 +64,7 @@ export function SessionChat({
     isConnected,
     onlineUsers,
     addInitialMessages,
+    refreshTranslations,
   } = useSessionChat({
     sessionId,
     userId,
@@ -77,108 +73,80 @@ export function SessionChat({
     userLanguages,
   });
 
-  // Load initial messages on mount
+  const {
+    containerRef,
+    scrollToBottom,
+    handleScroll,
+    shouldAutoScroll,
+    handleTouchStart,
+  } = useAutoScroll([messages]);
+
   useEffect(() => {
     addInitialMessages(initialMessages);
   }, [initialMessages, addInitialMessages]);
 
-  // Scroll to bottom when messages change
+  // Auto-resize textarea
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
-  // Request translations for messages missing them when language changes
-  useEffect(() => {
-    if (messages.length === 0) return;
-
-    const messagesNeedingTranslation = messages.filter((msg) => {
-      // Skip if already in user's language
-      if (msg.originalLanguage === primaryLanguage) return false;
-      // Skip if translation already exists
-      if (msg.translations[primaryLanguage]) return false;
-      // Skip if we already requested this translation
-      const requestKey = `${msg.id}-${primaryLanguage}`;
-      if (translationRequestedRef.current.has(requestKey)) return false;
-      return true;
-    });
-
-    if (messagesNeedingTranslation.length === 0) return;
-
-    // Mark as requested to prevent duplicate requests
-    messagesNeedingTranslation.forEach((msg) => {
-      translationRequestedRef.current.add(`${msg.id}-${primaryLanguage}`);
-    });
-
-    // Request translations (fire and forget - updates come via broadcast)
-    fetch("/api/messages/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messageIds: messagesNeedingTranslation.map((m) => m.id),
-        targetLanguage: primaryLanguage,
-        sessionId,
-      }),
-    }).catch(console.error);
-  }, [messages, primaryLanguage, sessionId]);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "0px";
+      const scrollHeight = textareaRef.current.scrollHeight;
+      textareaRef.current.style.height = Math.min(scrollHeight, 120) + "px";
+    }
+  }, [newMessage]);
 
   const handleSendMessage = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
+    (e?: React.FormEvent) => {
+      e?.preventDefault();
       if (!newMessage.trim() || !isConnected) return;
 
       sendMessage(newMessage);
       setNewMessage("");
+
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
     },
     [newMessage, isConnected, sendMessage]
   );
 
-  const handleLanguageChange = useCallback((language: LanguageCode) => {
-    // Update primary language (put it first in the array)
-    setUserLanguages((prev) => {
-      const filtered = prev.filter((l) => l !== language);
-      return [language, ...filtered].slice(0, 3);
-    });
-
-    // Persist to user preferences (non-blocking)
-    fetch("/api/users/me/languages", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        languages: [language],
-      }),
-    }).catch(console.error);
-  }, []);
-
-  // Determine what content to show for a message
-  const getDisplayContent = (
-    message: ChatMessageWithTranslation
-  ): { content: string; isTranslation: boolean } => {
-    // If message is in one of the user's preferred languages, show original
-    if (userLanguages.includes(message.originalLanguage)) {
-      return { content: message.content, isTranslation: false };
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
     }
-
-    // Otherwise, try to show translation in primary language
-    const translation = message.translations[primaryLanguage];
-    if (translation) {
-      return { content: translation, isTranslation: true };
-    }
-
-    // Fallback to original if no translation available yet
-    return { content: message.content, isTranslation: false };
   };
+
+  const handleLanguageChange = useCallback(
+    (language: LanguageCode) => {
+      setUserLanguages((prev) => {
+        const filtered = prev.filter((l) => l !== language);
+        return [language, ...filtered].slice(0, 3);
+      });
+
+      refreshTranslations();
+
+      fetch("/api/users/me/languages", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          languages: [language],
+        }),
+      }).catch(console.error);
+    },
+    [refreshTranslations]
+  );
 
   return (
     <div className="flex flex-col h-full w-full bg-muted/30 antialiased">
-      {/* Chat container - constrained width */}
       <div className="flex flex-col h-full w-full max-w-lg mx-auto bg-background shadow-sm">
-        {/* Header bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center gap-2">
             <div
               className={cn(
-                "h-2 w-2 rounded-full",
-                isConnected ? "bg-green-500" : "bg-yellow-500 animate-pulse"
+                "h-2 w-2 rounded-full transition-colors",
+                isConnected ? "bg-emerald-500" : "bg-amber-500 animate-pulse"
               )}
             />
             <span className="text-sm text-muted-foreground">
@@ -190,7 +158,6 @@ export function SessionChat({
             </span>
           </div>
 
-          {/* Language selector */}
           <div className="flex items-center gap-2">
             <Globe className="h-4 w-4 text-muted-foreground" />
             <Select
@@ -199,7 +166,7 @@ export function SessionChat({
                 handleLanguageChange(value as LanguageCode)
               }
             >
-              <SelectTrigger className="h-8 w-[130px] text-xs border-0 bg-muted/50">
+              <SelectTrigger className="h-8 w-[140px] text-xs border-0 bg-muted/50 hover:bg-muted transition-colors">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -216,36 +183,43 @@ export function SessionChat({
           </div>
         </div>
 
-        {/* Messages area */}
+        {/* Messages */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-y-auto px-4 py-4"
+          onScroll={handleScroll}
+          onTouchStart={handleTouchStart}
+          className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth"
         >
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-              <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-                <MessageCircle className="h-8 w-8 opacity-50" />
+              <div className="h-20 w-20 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-4">
+                <Languages className="h-10 w-10 text-primary/40" />
               </div>
-              <p className="text-sm font-medium">No messages yet</p>
-              <p className="text-xs opacity-70 mt-1">Start the conversation!</p>
+              <p className="text-base font-medium">Start a conversation</p>
+              <p className="text-sm opacity-70 mt-1 text-center max-w-[200px]">
+                Messages are automatically translated to your language
+              </p>
             </div>
           ) : (
-            <div>
+            <div className="space-y-1">
               {messages.map((message, index) => {
                 const prevMessage = index > 0 ? messages[index - 1] : null;
                 const showHeader =
                   !prevMessage || prevMessage.user.id !== message.user.id;
 
-                const { content, isTranslation } = getDisplayContent(message);
-
                 return (
                   <div
                     key={message.id}
-                    className="animate-in fade-in slide-in-from-bottom-1 duration-200"
+                    className={cn(
+                      "animate-in fade-in-0 duration-300",
+                      message.user.id === userId
+                        ? "slide-in-from-right-2"
+                        : "slide-in-from-left-2"
+                    )}
                   >
                     <MessageBubble
                       content={message.content}
-                      translatedContent={isTranslation ? content : undefined}
+                      translatedContent={message.translations[primaryLanguage]}
                       originalLanguage={message.originalLanguage}
                       userName={message.user.name}
                       userImageUrl={message.user.imageUrl}
@@ -253,7 +227,6 @@ export function SessionChat({
                       isOwnMessage={message.user.id === userId}
                       showHeader={showHeader}
                       userLanguage={primaryLanguage}
-                      showTranslatedByDefault={isTranslation}
                     />
                   </div>
                 );
@@ -262,35 +235,54 @@ export function SessionChat({
           )}
         </div>
 
-        {/* Input area */}
+        {/* Scroll to bottom button */}
+        {!shouldAutoScroll && messages.length > 0 && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10">
+            <Button
+              onClick={scrollToBottom}
+              size="sm"
+              variant="secondary"
+              className="rounded-full shadow-lg animate-in fade-in-0 slide-in-from-bottom-2 duration-200"
+            >
+              <ArrowDown className="h-4 w-4 mr-1" />
+              New messages
+            </Button>
+          </div>
+        )}
+
+        {/* Input */}
         <form
           onSubmit={handleSendMessage}
-          className="p-4 border-t border-border/50"
+          className="p-4 border-t border-border/50 bg-background"
         >
-          <div className="flex items-center gap-2 bg-muted/40 rounded-full px-4 py-2">
-            <input
-              type="text"
+          <div className="flex items-end gap-2 bg-muted/40 rounded-2xl px-4 py-2 border border-transparent focus-within:border-primary/20 transition-colors">
+            <textarea
+              ref={textareaRef}
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder={isConnected ? "Type a message..." : "Connecting..."}
               disabled={!isConnected}
-              className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground/60 focus:outline-none disabled:cursor-not-allowed"
+              rows={1}
+              className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0 disabled:cursor-not-allowed resize-none min-h-[24px] max-h-[120px] py-1"
             />
             <Button
               type="submit"
               size="icon"
-              variant="ghost"
               disabled={!isConnected || !newMessage.trim()}
               className={cn(
-                "h-8 w-8 rounded-full transition-all",
+                "h-8 w-8 rounded-full shrink-0 transition-all duration-200",
                 newMessage.trim()
-                  ? "bg-foreground text-background hover:bg-foreground/90"
-                  : "text-muted-foreground"
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90 scale-100"
+                  : "bg-muted text-muted-foreground scale-95"
               )}
             >
               <Send className="h-4 w-4" />
             </Button>
           </div>
+          <p className="text-[10px] text-muted-foreground/50 text-center mt-2">
+            Press Enter to send, Shift+Enter for new line
+          </p>
         </form>
       </div>
     </div>
