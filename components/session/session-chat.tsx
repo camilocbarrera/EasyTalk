@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { useChatScroll } from "@/hooks/use-chat-scroll";
@@ -58,10 +58,7 @@ export function SessionChat({
   const [newMessage, setNewMessage] = useState("");
   const [userLanguages, setUserLanguages] =
     useState<LanguageCode[]>(initialUserLanguages);
-  const [pendingTranslations, setPendingTranslations] = useState<Set<string>>(
-    new Set()
-  );
-  const [isPending, startTransition] = useTransition();
+  const translationRequestedRef = useRef<Set<string>>(new Set());
 
   // Primary language is the first in the array
   const primaryLanguage = userLanguages[0] || "en";
@@ -90,19 +87,39 @@ export function SessionChat({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Track pending translations for messages that need them
+  // Request translations for messages missing them when language changes
   useEffect(() => {
-    const newPending = new Set<string>();
-    for (const message of messages) {
-      // Check if message needs translation and doesn't have it yet
-      const needsTranslation = !userLanguages.includes(message.originalLanguage);
-      const hasTranslation = message.translations[primaryLanguage];
-      if (needsTranslation && !hasTranslation) {
-        newPending.add(message.id);
-      }
-    }
-    setPendingTranslations(newPending);
-  }, [messages, primaryLanguage, userLanguages]);
+    if (messages.length === 0) return;
+
+    const messagesNeedingTranslation = messages.filter((msg) => {
+      // Skip if already in user's language
+      if (msg.originalLanguage === primaryLanguage) return false;
+      // Skip if translation already exists
+      if (msg.translations[primaryLanguage]) return false;
+      // Skip if we already requested this translation
+      const requestKey = `${msg.id}-${primaryLanguage}`;
+      if (translationRequestedRef.current.has(requestKey)) return false;
+      return true;
+    });
+
+    if (messagesNeedingTranslation.length === 0) return;
+
+    // Mark as requested to prevent duplicate requests
+    messagesNeedingTranslation.forEach((msg) => {
+      translationRequestedRef.current.add(`${msg.id}-${primaryLanguage}`);
+    });
+
+    // Request translations (fire and forget - updates come via broadcast)
+    fetch("/api/messages/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messageIds: messagesNeedingTranslation.map((m) => m.id),
+        targetLanguage: primaryLanguage,
+        sessionId,
+      }),
+    }).catch(console.error);
+  }, [messages, primaryLanguage, sessionId]);
 
   const handleSendMessage = useCallback(
     (e: React.FormEvent) => {
@@ -122,21 +139,15 @@ export function SessionChat({
       return [language, ...filtered].slice(0, 3);
     });
 
-    // Persist to user preferences
-    startTransition(async () => {
-      try {
-        await fetch("/api/users/me/languages", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            languages: [language, ...userLanguages.filter((l) => l !== language)].slice(0, 3),
-          }),
-        });
-      } catch (error) {
-        console.error("Failed to update language preference:", error);
-      }
-    });
-  }, [userLanguages]);
+    // Persist to user preferences (non-blocking)
+    fetch("/api/users/me/languages", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        languages: [language],
+      }),
+    }).catch(console.error);
+  }, []);
 
   // Determine what content to show for a message
   const getDisplayContent = (
@@ -187,7 +198,6 @@ export function SessionChat({
               onValueChange={(value) =>
                 handleLanguageChange(value as LanguageCode)
               }
-              disabled={isPending}
             >
               <SelectTrigger className="h-8 w-[130px] text-xs border-0 bg-muted/50">
                 <SelectValue />
@@ -243,7 +253,6 @@ export function SessionChat({
                       isOwnMessage={message.user.id === userId}
                       showHeader={showHeader}
                       userLanguage={primaryLanguage}
-                      isTranslating={pendingTranslations.has(message.id)}
                       showTranslatedByDefault={isTranslation}
                     />
                   </div>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { type LanguageCode } from "@/lib/constants/languages";
-import { Languages, Loader2 } from "lucide-react";
+import { Languages } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface MessageBubbleProps {
@@ -16,7 +16,6 @@ interface MessageBubbleProps {
   isOwnMessage: boolean;
   showHeader: boolean;
   userLanguage: LanguageCode;
-  isTranslating?: boolean;
   showTranslatedByDefault?: boolean;
 }
 
@@ -30,11 +29,8 @@ export function MessageBubble({
   isOwnMessage,
   showHeader,
   userLanguage,
-  isTranslating = false,
   showTranslatedByDefault = false,
 }: MessageBubbleProps) {
-  // If we should show translated by default, start with showOriginal = false
-  // Otherwise, start with showing original (showOriginal = true means we see original)
   const [showOriginal, setShowOriginal] = useState(!showTranslatedByDefault);
 
   const needsTranslation = originalLanguage !== userLanguage;
@@ -110,24 +106,15 @@ export function MessageBubble({
           {displayContent}
         </div>
 
-        {/* Translation controls */}
-        {needsTranslation && (
-          <div className="flex items-center px-1">
-            {isTranslating ? (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Translating...</span>
-              </div>
-            ) : hasTranslation ? (
-              <button
-                className="flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors"
-                onClick={() => setShowOriginal(!showOriginal)}
-              >
-                <Languages className="h-3 w-3" />
-                {showOriginal ? "Show translation" : "Show original"}
-              </button>
-            ) : null}
-          </div>
+        {/* Translation toggle - only show if translation exists */}
+        {needsTranslation && hasTranslation && (
+          <button
+            className="flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors px-1"
+            onClick={() => setShowOriginal(!showOriginal)}
+          >
+            <Languages className="h-3 w-3" />
+            {showOriginal ? "Show translation" : "Show original"}
+          </button>
         )}
 
         {/* Time for own messages */}
